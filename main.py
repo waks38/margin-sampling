@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 
+import wandb
 from seeds import set_seed
 
 
@@ -36,6 +37,7 @@ class SimpleNet(nn.Module):
 
 
 def train(cfg: dict) -> None:
+    wandb.init(project='margin-sampling',config=cfg)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Rodando em: {device}")
 
@@ -58,9 +60,8 @@ def train(cfg: dict) -> None:
             total_loss += loss.item() * X.size(0)
             correct += (outputs.argmax(dim=1) == y).sum().item()
             total += y.size(0)
-
         print(f"Epoch {epoch:2d}/{cfg['epochs']} | loss: {total_loss/total:.4f} | acc: {correct/total:.4f}")
-
+        wandb.log({"loss": total_loss/total, "acc": correct/total, "epoch": epoch})
 
 def main() -> None:
     cfg = load_config()
@@ -70,4 +71,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
