@@ -1,0 +1,32 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# Ambientes virtuais
+venv/
+.venv/
+env/
+
+# Dados e modelos (não versionar datasets nem pesos)
+data/
+*.pt
+*.pth
+*.ckpt
+*.onnx
+checkpoints/
+
+# Weights & Biases (logs locais da sessão)
+wandb/
+
+# Saídas e logs
+outputs/
+logs/
+*.log
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
