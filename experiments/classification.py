@@ -1,10 +1,11 @@
+import os
 import torch
+import wandb
 
 from experiments.base import Experiment
 from models import build_model
 from losses import build_loss
 from data import make_data
-import wandb
 
 class ClassificationExperiment(Experiment):
     """Experimento de classificação supervisionada."""
@@ -46,4 +47,9 @@ class ClassificationExperiment(Experiment):
             print(f"Epoch {epoch:2d}/{cfg['epochs']} | loss: {avg_loss:.4f} | acc: {acc:.4f}")
             wandb.log({"loss": avg_loss, "acc": acc, "epoch": epoch})
 
-        return model
+        # Salva o modelo treinado em disco e devolve o caminho ao chassi
+        os.makedirs("outputs", exist_ok=True)
+        caminho = os.path.join("outputs", "classification_model.pt")
+        torch.save(model.state_dict(), caminho)
+        print(f"Modelo salvo em: {caminho}")
+        return caminho

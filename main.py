@@ -20,7 +20,12 @@ def main() -> None:
         wandb.init(project="margin-sampling", name=nome, config=cfg[nome])
 
         experiment = build_experiment(nome, cfg)
-        experiment.run()
+        caminho = experiment.run()
+
+        # Sobe o artefato gerado pro wandb (persiste na nuvem)
+        artifact = wandb.Artifact(name=nome, type="model")
+        artifact.add_file(caminho)
+        wandb.log_artifact(artifact)
 
         wandb.finish()
 
