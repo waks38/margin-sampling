@@ -2,7 +2,7 @@
 seed: 42
 
 # Lista de experimentos a rodar, em ordem
-run: ["classification"]
+run: ["vae_gan"]
 
 # --- Blocos por experimento (cada um define sua própria forma) ---
 classification:
@@ -15,3 +15,28 @@ classification:
   batch_size: 32
   learning_rate: 0.001
   epochs: 10
+
+vae_gan:
+  # dados
+  data_root: "/kaggle/input/datasets/paultimothymooney/chest-xray-pneumonia/chest_xray"
+  channels: 1                # raio-X = grayscale
+  img_size: 128              # múltiplo de 32
+  batch_size: 16
+  num_workers: 4             # >0 no Kaggle (Linux)
+  val_frac: 0.15
+  test_frac: 0.15
+  seed: 42                   # seed do split (reprodutível)
+  # modelo
+  base: 64
+  zdim: 128
+  # treino
+  epochs: 50
+  lr_g: 0.0002
+  lr_d: 0.0002
+  beta: 1.0                  # peso final do KL
+  beta_warm: 2000            # passos de warmup do KL
+  disc_start: 2500           # passo a partir do qual o GAN entra
+  l_perc: 0.3                # peso da perda perceptual (0 = desliga VGG)
+  l_adv: 0.5                 # peso da perda adversarial
+
+

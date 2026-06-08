@@ -3,7 +3,7 @@ import wandb
 
 from seeds import set_seed
 from experiments import build_experiment
-
+from datetime import datetime
 
 def load_config(path: str = "config.yaml") -> dict:
     """Lê o arquivo de configuração."""
@@ -20,14 +20,15 @@ def main() -> None:
         wandb.init(project="margin-sampling", name=nome, config=cfg[nome])
 
         experiment = build_experiment(nome, cfg)
-        caminho = experiment.run()
+        try:
+            caminho = experiment.run()
 
-        # Sobe o artefato gerado pro wandb (persiste na nuvem)
-        artifact = wandb.Artifact(name=nome, type="model")
-        artifact.add_file(caminho)
-        wandb.log_artifact(artifact)
-
-        wandb.finish()
+            # Sobe o artefato gerado pro wandb (persiste na nuvem)
+            artifact = wandb.Artifact(name=nome, type="model")
+            artifact.add_file(caminho)
+            wandb.log_artifact(artifact)
+        finally:
+            wandb.finish()
 
 
 if __name__ == "__main__":

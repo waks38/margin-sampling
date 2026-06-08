@@ -8,4 +8,4 @@ def make_data(cfg: dict) -> DataLoader:
     true_weights = torch.randn(cfg["input_size"], cfg["num_classes"])
     y = (X @ true_weights).argmax(dim=1)   # rótulo depende de X -> dá pra aprender
     dataset = TensorDataset(X, y)
-    return DataLoader(dataset, batch_size=cfg["batch_size"], shuffle=True) 
+    return DataLoader(dataset, batch_size=cfg["batch_size"], shuffle=True)

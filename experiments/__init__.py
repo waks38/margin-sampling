@@ -1,9 +1,11 @@
 from experiments.classification import ClassificationExperiment
+from experiments.vae_gan import VaeGan
 
 # Registry: mapeia o nome (do config) -> a classe do experimento.
 # Para adicionar um experimento novo: importe-o acima e registre aqui.
 EXPERIMENTS = {
     "classification": ClassificationExperiment,
+    "vae_gan": VaeGan,
 }
 
 

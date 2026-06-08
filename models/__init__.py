@@ -1,4 +1,6 @@
 from models.simple_net import SimpleNet
+from models.vae_gan import Encoder
+from models.vae_gan import Decoder
 
 # Registry: mapeia o nome (string do config) -> a classe da arquitetura.
 # Para adicionar um modelo novo: importe-o acima e registre aqui embaixo.

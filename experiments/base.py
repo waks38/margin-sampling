@@ -8,6 +8,6 @@ class Experiment(ABC):
         self.cfg = cfg
 
     @abstractmethod
-    def run(self):
-        """Toda subclasse deve implementar este método."""
-        pass
+    def run(self) -> str:
+        """Treina o modelo, salva em disco e retorna o caminho do arquivo."""
+        ...
