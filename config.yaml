@@ -1,0 +1,17 @@
+﻿# Hiperparâmetros do experimento
+# Tudo que muda de um experimento pra outro vive aqui.
+
+seed: 42                # semente da aleatoriedade (reprodutibilidade)
+
+# Dados
+input_size: 20          # número de features de entrada
+num_classes: 3          # número de classes de saída
+num_samples: 1000       # tamanho do dataset sintético
+
+# Modelo
+hidden_size: 64         # neurônios na camada escondida
+
+# Treino
+batch_size: 32
+learning_rate: 0.001
+epochs: 10
