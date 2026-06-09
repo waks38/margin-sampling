@@ -9,6 +9,7 @@ Loga tudo no fim e devolve o caminho do modelo (o chassi sobe como artefato).
 import os
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 
@@ -16,6 +17,11 @@ from experiments.base import Experiment
 from experiments.vae_gan.data import importar, tratar, carregar
 from experiments.vae_gan.models import Encoder, Decoder, PatchDiscriminator, VGGPerceptual, reparam
 from experiments.vae_gan.losses import kl_div, d_hinge, g_hinge
+
+
+def _unwrap(m):
+    """Tira o wrapper do DataParallel pra salvar/carregar state_dict limpo."""
+    return m.module if isinstance(m, nn.DataParallel) else m
 
 
 class VaeGan(Experiment):
@@ -39,6 +45,11 @@ class VaeGan(Experiment):
         dec = Decoder(ch, cfg["base"], cfg["zdim"], cfg["img_size"]).to(device)
         disc = PatchDiscriminator(ch, cfg["base"]).to(device)
         perc = VGGPerceptual().to(device) if cfg["l_perc"] > 0 else None  # None = sem perceptual
+
+        # 2 GPUs (Kaggle T4 x2): divide o lote entre elas. No-op em 1 GPU/CPU.
+        if cfg.get("use_dp", False) and device == "cuda" and torch.cuda.device_count() > 1:
+            print(f"DataParallel em {torch.cuda.device_count()} GPUs")
+            enc, dec, disc = nn.DataParallel(enc), nn.DataParallel(dec), nn.DataParallel(disc)
 
         optG = torch.optim.Adam(list(enc.parameters()) + list(dec.parameters()),
                                 lr=cfg["lr_g"], betas=(0.5, 0.9))
@@ -97,7 +108,7 @@ class VaeGan(Experiment):
         # ---- salva e devolve o caminho (o chassi sobe como artefato) ----
         os.makedirs("outputs", exist_ok=True)
         caminho = os.path.join("outputs", "vae_gan.pt")
-        torch.save({"enc": enc.state_dict(), "dec": dec.state_dict(),
-                    "disc": disc.state_dict(), "hparams": dict(cfg)}, caminho)
+        torch.save({"enc": _unwrap(enc).state_dict(), "dec": _unwrap(dec).state_dict(),
+                    "disc": _unwrap(disc).state_dict(), "hparams": dict(cfg)}, caminho)
         print(f"Modelo salvo em: {caminho}")
         return caminho

@@ -23,6 +23,7 @@ vae_gan:
   img_size: 128              # múltiplo de 32
   batch_size: 32
   num_workers: 4             # >0 no Kaggle (Linux)
+  use_dp: true               # usa as 2 GPUs do Kaggle (no-op em 1 GPU/CPU)
   val_frac: 0.15
   test_frac: 0.15
   # modelo
