@@ -25,7 +25,6 @@ vae_gan:
   num_workers: 4             # >0 no Kaggle (Linux)
   val_frac: 0.15
   test_frac: 0.15
-  seed: 42                   # seed do split (reprodutível)
   # modelo
   base: 64
   zdim: 128

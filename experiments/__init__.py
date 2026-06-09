@@ -14,5 +14,6 @@ def build_experiment(name: str, cfg: dict):
     if name not in EXPERIMENTS:
         disponiveis = ", ".join(EXPERIMENTS.keys())
         raise ValueError(f"Experimento '{name}' nao registrado. Disponiveis: {disponiveis}")
-    bloco = cfg[name]
+    # injeta o seed UNIVERSAL no bloco (fonte única; cada experimento o recebe)
+    bloco = {**cfg[name], "seed": cfg["seed"]}
     return EXPERIMENTS[name](bloco)

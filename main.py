@@ -1,9 +1,9 @@
-﻿import yaml
+import yaml
 import wandb
 
 from seeds import set_seed
 from experiments import build_experiment
-from datetime import datetime
+
 
 def load_config(path: str = "config.yaml") -> dict:
     """Lê o arquivo de configuração."""
@@ -17,7 +17,9 @@ def main() -> None:
     for nome in cfg["run"]:
         print(f"\n=== Rodando experimento: {nome} ===")
         set_seed(cfg["seed"])
-        wandb.init(project="margin-sampling", name=nome, config=cfg[nome])
+        # loga o bloco do experimento + o seed universal (auditabilidade)
+        wandb.init(project="margin-sampling", name=nome,
+                   config={**cfg[nome], "seed": cfg["seed"]})
 
         experiment = build_experiment(nome, cfg)
         try:

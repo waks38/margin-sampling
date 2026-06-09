@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+"""Modelos do experimento VAE-GAN: Encoder, Decoder, PatchDiscriminator, VGGPerceptual."""
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
@@ -31,6 +33,8 @@ def reparam(mu, logvar):
     sigma = torch.exp(0.5 * logvar)
     eps = torch.randn_like(mu)
     return mu + sigma * eps
+
+
 
 
 class Encoder(nn.Module):
@@ -149,4 +153,3 @@ class VGGPerceptual(nn.Module):
             rec, x = b(rec), b(x)
             loss = loss + F.l1_loss(rec, x)
         return loss
-
