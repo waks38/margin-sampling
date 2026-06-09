@@ -34,6 +34,9 @@ def importar(root) -> list:
     for f in sorted(root.rglob("*")):
         if f.suffix.lower() not in EXTS:
             continue
+        # lixo de zip do macOS (pasta __MACOSX / arquivos AppleDouble ._*): não são imagens
+        if "__MACOSX" in f.parts or f.name.startswith("._"):
+            continue
         classe = f.parent.name.upper()
         if classe not in CLASSES:
             continue
