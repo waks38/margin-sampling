@@ -109,7 +109,7 @@ class VaeGan(Experiment):
             if (ep + 1) % 10 == 0 or ep == cfg["epochs"] - 1:
                 log.update(self._avaliar(enc, dec, xs_h, xs_s, device))
 
-            wandb.log(log, step=ep)
+            wandb.log(log)  # sem step explícito: o wandb numera sozinho (evita drop silencioso)
             print(f"ep {ep + 1:03d}/{cfg['epochs']} | l1 {log['l1']:.3f} perc {log['perc']:.3f} "
                   f"kl {log['kl']:.3f} adv {log['adv']:.3f} d {log['d']:.3f} beta {beta:.2f}"
                   + (f" | colapso {log['colapso']:.3f}" if "colapso" in log else ""))

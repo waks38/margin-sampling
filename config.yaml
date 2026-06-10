@@ -21,7 +21,7 @@ vae_gan:
   data_root: "/kaggle/input/datasets/paultimothymooney/chest-xray-pneumonia/chest_xray"
   channels: 1                # raio-X = grayscale
   img_size: 128              # múltiplo de 32
-  batch_size: 48
+  batch_size: 64
   num_workers: 4             # >0 no Kaggle (Linux)
   use_dp: false               # usa as 2 GPUs do Kaggle (no-op em 1 GPU/CPU)
   val_frac: 0.15
@@ -30,7 +30,7 @@ vae_gan:
   base: 64
   zdim: 128
   # treino
-  epochs: 50
+  epochs: 5
   lr_g: 0.0002
   lr_d: 0.0002
   beta: 1.0                  # peso final do KL
