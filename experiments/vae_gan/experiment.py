@@ -1,20 +1,25 @@
 # -*- coding: utf-8 -*-
 """Experimento VAE-GAN (raio-X): VAE com discriminador GAN + perda perceptual.
 
-run(): importar -> tratar -> carregar -> treinar -> salvar -> devolve o caminho.
+run(): importar -> tratar -> carregar -> treinar -> avaliar -> salvar.
 Loss G: l1 + l_perc*perceptual + beta*KL + l_adv*adversarial.
 beta sobe por warmup; o GAN só entra após disc_start passos. Sem resume.
-Loga tudo no fim e devolve o caminho do modelo (o chassi sobe como artefato).
+
+Logging W&B:
+- escalares (l1, perc, kl, adv, d, beta) -> toda época;
+- visuais (recon + interpolação) e gate (colapso) -> a cada 10 épocas e no fim.
+Devolve o caminho do modelo (o chassi sobe como artefato).
 """
 import os
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.utils as vutils
 import wandb
 
 from experiments.base import Experiment
-from experiments.vae_gan.data import importar, tratar, carregar
+from experiments.vae_gan.data import importar, tratar, carregar, _ImagensXRay
 from experiments.vae_gan.models import Encoder, Decoder, PatchDiscriminator, VGGPerceptual, reparam
 from experiments.vae_gan.losses import kl_div, d_hinge, g_hinge
 
@@ -39,6 +44,9 @@ class VaeGan(Experiment):
                                   cfg["channels"], cfg["num_workers"])
         print(f"split -> train {len(train)} | val {len(val)} | test {len(test)} (treina só no train)")
 
+        # conjuntos fixos (saudáveis e doentes) p/ visuais + gate, sempre os mesmos
+        xs_h, xs_s = self._fixos(train, cfg, device)
+
         # ---- modelos ----
         ch = cfg["channels"]
         enc = Encoder(ch, cfg["base"], cfg["zdim"], cfg["img_size"]).to(device)
@@ -56,7 +64,6 @@ class VaeGan(Experiment):
         optD = torch.optim.Adam(disc.parameters(), lr=cfg["lr_d"], betas=(0.5, 0.9))
 
         # ---- loop de treino ----
-        historico = []
         step = 0
         beta = 0.0
         for ep in range(cfg["epochs"]):
@@ -95,15 +102,17 @@ class VaeGan(Experiment):
                 step += 1
 
             nb = max(1, nb)
-            m = {k: v / nb for k, v in soma.items()}
-            m.update(epoch=ep, beta=beta)
-            historico.append(m)
-            print(f"ep {ep + 1:03d}/{cfg['epochs']} | l1 {m['l1']:.3f} perc {m['perc']:.3f} "
-                  f"kl {m['kl']:.3f} adv {m['adv']:.3f} d {m['d']:.3f} beta {beta:.2f}")
+            log = {k: v / nb for k, v in soma.items()}
+            log.update(epoch=ep, beta=beta)
 
-        # ---- loga TUDO no fim (curvas completas) ----
-        for m in historico:
-            wandb.log(m, step=m["epoch"])
+            # visuais + gate: a cada 10 épocas e no fim
+            if (ep + 1) % 10 == 0 or ep == cfg["epochs"] - 1:
+                log.update(self._avaliar(enc, dec, xs_h, xs_s, device))
+
+            wandb.log(log, step=ep)
+            print(f"ep {ep + 1:03d}/{cfg['epochs']} | l1 {log['l1']:.3f} perc {log['perc']:.3f} "
+                  f"kl {log['kl']:.3f} adv {log['adv']:.3f} d {log['d']:.3f} beta {beta:.2f}"
+                  + (f" | colapso {log['colapso']:.3f}" if "colapso" in log else ""))
 
         # ---- salva e devolve o caminho (o chassi sobe como artefato) ----
         os.makedirs("outputs", exist_ok=True)
@@ -112,3 +121,55 @@ class VaeGan(Experiment):
                     "disc": _unwrap(disc).state_dict(), "hparams": dict(cfg)}, caminho)
         print(f"Modelo salvo em: {caminho}")
         return caminho
+
+    # ------------------------------------------------------------------
+    # Avaliação (gate + visuais)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _fixos(train, cfg, device):
+        """Conjuntos fixos de até 8 saudáveis e 8 doentes (sempre os mesmos)."""
+        saud = [it for it in train if it["label"] == 0][:8]
+        doente = [it for it in train if it["label"] == 1][:8]
+        if not saud or not doente:
+            return None, None  # falta uma das classes -> sem gate/visuais
+        ds = _ImagensXRay(saud + doente, cfg["img_size"], cfg["channels"])
+        xs_h = torch.stack([ds[i][0] for i in range(len(saud))]).to(device)
+        xs_s = torch.stack([ds[i][0] for i in range(len(saud), len(saud) + len(doente))]).to(device)
+        return xs_h, xs_s
+
+    @staticmethod
+    @torch.no_grad()
+    def _avaliar(enc, dec, xs_h, xs_s, device):
+        """Gate (colapso médio sobre pares) + visuais (recon e interpolação)."""
+        if xs_h is None or xs_s is None:
+            return {}
+        enc.eval(); dec.eval()
+        out = {}
+
+        # GATE — colapso: L1 médio entre recon(saudável) e recon(doente) sobre os pares.
+        # Perto de 0 => decoder ignora z (colapsou). Robustez vem da média nos pares.
+        # Pareia até o mínimo (as duas classes podem ter contagens diferentes).
+        n = min(xs_h.size(0), xs_s.size(0))
+        rec_h = dec(reparam(*enc(xs_h[:n])))
+        rec_s = dec(reparam(*enc(xs_s[:n])))
+        out["colapso"] = float(F.l1_loss(rec_h, rec_s))
+
+        # VISUAL — reconstrução: 4 saudáveis + 4 doentes; entrada (cima) vs recon (baixo)
+        x = torch.cat([xs_h[:4], xs_s[:4]])
+        rec = dec(reparam(*enc(x)))
+        g = vutils.make_grid(torch.cat([x, rec]), nrow=8, normalize=True, value_range=(-1, 1))
+        out["recon"] = wandb.Image(g.permute(1, 2, 0).cpu().numpy())
+
+        # VISUAL — interpolação: 3 pares saudável->doente, 7 passos (o produto da tese)
+        n_pares = min(3, xs_h.size(0), xs_s.size(0))
+        linhas = []
+        for i in range(n_pares):
+            za = reparam(*enc(xs_h[i:i + 1]))
+            zb = reparam(*enc(xs_s[i:i + 1]))
+            for t in torch.linspace(0, 1, 7, device=device):
+                linhas.append(dec((1 - t) * za + t * zb))
+        gi = vutils.make_grid(torch.cat(linhas), nrow=7, normalize=True, value_range=(-1, 1))
+        out["interp"] = wandb.Image(gi.permute(1, 2, 0).cpu().numpy())
+
+        enc.train(); dec.train()
+        return out
