@@ -30,13 +30,13 @@ vae_gan:
   base: 64
   zdim: 128
   # treino
-  epochs: 5
+  epochs: 50
   lr_g: 0.0002
   lr_d: 0.0002
-  beta: 1.0                  # peso final do KL
+  beta: .5                  # peso final do KL
   beta_warm: 2000            # passos de warmup do KL
-  disc_start: 2500           # passo a partir do qual o GAN entra
+  disc_start: 3500           # passo a partir do qual o GAN entra
   l_perc: 0.3                # peso da perda perceptual (0 = desliga VGG)
-  l_adv: 0.5                 # peso da perda adversarial
+  l_adv: 0.7                 # peso da perda adversarial
 
 
