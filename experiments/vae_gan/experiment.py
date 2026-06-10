@@ -102,17 +102,22 @@ class VaeGan(Experiment):
                 step += 1
 
             nb = max(1, nb)
-            log = {k: v / nb for k, v in soma.items()}
-            log.update(epoch=ep, beta=beta)
+            l1m = soma["l1"] / nb
+            percm = soma["perc"] / nb
+            klm = soma["kl"] / nb
+            advm = soma["adv"] / nb
+            dm = soma["d"] / nb
 
-            # visuais + gate: a cada 10 épocas e no fim
+            print(f"ep {ep + 1:03d}/{cfg['epochs']} | l1 {l1m:.3f} perc {percm:.3f} "
+                  f"kl {klm:.3f} adv {advm:.3f} d {dm:.3f} beta {beta:.2f}")
+
+            # log DIRETO, exatamente como em classification.py
+            wandb.log({"l1": l1m, "perc": percm, "kl": klm, "adv": advm,
+                       "d": dm, "beta": beta, "epoch": ep})
+
+            # visuais + gate: a cada 10 épocas e no fim (call separado)
             if (ep + 1) % 10 == 0 or ep == cfg["epochs"] - 1:
-                log.update(self._avaliar(enc, dec, xs_h, xs_s, device))
-
-            wandb.log(log)  # sem step explícito: o wandb numera sozinho (evita drop silencioso)
-            print(f"ep {ep + 1:03d}/{cfg['epochs']} | l1 {log['l1']:.3f} perc {log['perc']:.3f} "
-                  f"kl {log['kl']:.3f} adv {log['adv']:.3f} d {log['d']:.3f} beta {beta:.2f}"
-                  + (f" | colapso {log['colapso']:.3f}" if "colapso" in log else ""))
+                wandb.log(self._avaliar(enc, dec, xs_h, xs_s, device))
 
         # ---- salva e devolve o caminho (o chassi sobe como artefato) ----
         os.makedirs("outputs", exist_ok=True)
