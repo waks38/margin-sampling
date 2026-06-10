@@ -21,9 +21,9 @@ vae_gan:
   data_root: "/kaggle/input/datasets/paultimothymooney/chest-xray-pneumonia/chest_xray"
   channels: 1                # raio-X = grayscale
   img_size: 128              # múltiplo de 32
-  batch_size: 32
+  batch_size: 48
   num_workers: 4             # >0 no Kaggle (Linux)
-  use_dp: true               # usa as 2 GPUs do Kaggle (no-op em 1 GPU/CPU)
+  use_dp: false               # usa as 2 GPUs do Kaggle (no-op em 1 GPU/CPU)
   val_frac: 0.15
   test_frac: 0.15
   # modelo
