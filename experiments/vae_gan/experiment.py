@@ -29,6 +29,22 @@ def _unwrap(m):
     return m.module if isinstance(m, nn.DataParallel) else m
 
 
+def slerp(z_a, z_b, t):
+    """Interpolação esférica entre z_a e z_b (t em [0,1]).
+
+    Segue o arco do grande-círculo em vez da corda reta. Numa gaussiana de dim alta
+    quase toda amostra mora numa casca de raio ~sqrt(d); a corda reta corta o interior
+    vazio (norma menor) -> meio do caminho fora da distribuição -> recon borrada. O slerp
+    mantém a norma ~constante, então todo z intermediário fica na casca que o decoder viu.
+    Quando o ângulo -> 0 o limite vira a interpolação linear naturalmente.
+    """
+    a = z_a / z_a.norm(dim=1, keepdim=True)
+    b = z_b / z_b.norm(dim=1, keepdim=True)
+    omega = torch.acos((a * b).sum(1, keepdim=True).clamp(-1.0, 1.0))
+    so = torch.sin(omega).clamp_min(1e-6)
+    return torch.sin((1 - t) * omega) / so * z_a + torch.sin(t * omega) / so * z_b
+
+
 class VaeGan(Experiment):
     """Treina um VAE com discriminador GAN (PatchGAN) e perda perceptual (VGG)."""
 
@@ -155,13 +171,13 @@ class VaeGan(Experiment):
         # Perto de 0 => decoder ignora z (colapsou). Robustez vem da média nos pares.
         # Pareia até o mínimo (as duas classes podem ter contagens diferentes).
         n = min(xs_h.size(0), xs_s.size(0))
-        rec_h = dec(reparam(*enc(xs_h[:n])))
-        rec_s = dec(reparam(*enc(xs_s[:n])))
+        rec_h = dec(enc(xs_h[:n])[0])   # mu (média do posterior): recon determinística
+        rec_s = dec(enc(xs_s[:n])[0])   # gate estável e comparável entre épocas
         out["colapso"] = float(F.l1_loss(rec_h, rec_s))
 
         # VISUAL — reconstrução: 4 saudáveis + 4 doentes; entrada (cima) vs recon (baixo)
         x = torch.cat([xs_h[:4], xs_s[:4]])
-        rec = dec(reparam(*enc(x)))
+        rec = dec(enc(x)[0])            # mu: reconstrução sem ruído de amostragem
         g = vutils.make_grid(torch.cat([x, rec]), nrow=8, normalize=True, value_range=(-1, 1))
         out["recon"] = wandb.Image(g.permute(1, 2, 0).cpu().numpy())
 
@@ -169,10 +185,10 @@ class VaeGan(Experiment):
         n_pares = min(3, xs_h.size(0), xs_s.size(0))
         linhas = []
         for i in range(n_pares):
-            za = reparam(*enc(xs_h[i:i + 1]))
-            zb = reparam(*enc(xs_s[i:i + 1]))
+            za = enc(xs_h[i:i + 1])[0]  # mu das pontas: caminho limpo e reprodutível
+            zb = enc(xs_s[i:i + 1])[0]
             for t in torch.linspace(0, 1, 7, device=device):
-                linhas.append(dec((1 - t) * za + t * zb))
+                linhas.append(dec(slerp(za, zb, t)))  # esférica: fica na casca de raio ~sqrt(d)
         gi = vutils.make_grid(torch.cat(linhas), nrow=7, normalize=True, value_range=(-1, 1))
         out["interp"] = wandb.Image(gi.permute(1, 2, 0).cpu().numpy())
 
