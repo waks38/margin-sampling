@@ -31,6 +31,7 @@ def importar(root) -> list:
     (Única parte que sabe da origem dos dados — mudou a origem? mexe só aqui.)"""
     root = Path(root)
     itens = []
+    vistos = set()  # o zip do Kaggle tem cópia aninhada chest_xray/chest_xray -> rglob veria 2x
     for f in sorted(root.rglob("*")):
         if f.suffix.lower() not in EXTS:
             continue
@@ -40,6 +41,11 @@ def importar(root) -> list:
         classe = f.parent.name.upper()
         if classe not in CLASSES:
             continue
+        # dedup por (classe, nome, tamanho): mesma imagem em caminhos diferentes conta 1x
+        chave = (classe, f.name, f.stat().st_size)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
         itens.append({"path": str(f), "label": CLASSES[classe],
                       "paciente": _paciente(f, classe)})
     if not itens:
@@ -79,7 +85,10 @@ class _ImagensXRay(Dataset):
         if channels == 1:
             passos.append(T.Grayscale(1))
         passos += [
-            T.Resize((img_size, img_size)),
+            # preserva a proporção do raio-X (lado menor -> img_size) e corta o
+            # centro, em vez de esticar pro quadrado e distorcer a anatomia
+            T.Resize(img_size),
+            T.CenterCrop(img_size),
             T.ToTensor(),                                      # -> [0,1]
             T.Normalize([0.5] * channels, [0.5] * channels),   # -> [-1,1]
         ]

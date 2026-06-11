@@ -33,10 +33,14 @@ vae_gan:
   epochs: 50
   lr_g: 0.0002
   lr_d: 0.0002
-  beta: .5                  # peso final do KL
-  beta_warm: 2000            # passos de warmup do KL
-  disc_start: 3500           # passo a partir do qual o GAN entra
+  beta: 0.01                 # peso final do KL (KL agora soma nas dims; 0.5 antigo ~ 0.004 nesta escala)
+  beta_warm_epochs: 10       # épocas de warmup do KL (rampa linear por passo)
+  disc_start_epoch: 15       # época a partir da qual o GAN entra
   l_perc: 0.3                # peso da perda perceptual (0 = desliga VGG)
   l_adv: 0.7                 # peso da perda adversarial
+  amp: true                  # mixed precision (fp16) na GPU; no-op em CPU
+  # checkpoint
+  ckpt_every: 5              # salva checkpoint a cada N épocas (0 = desliga)
+  resume: true               # retoma de outputs/vae_gan_ckpt.pt se existir
 
 
