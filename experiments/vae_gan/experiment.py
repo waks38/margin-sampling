@@ -138,6 +138,7 @@ class VaeGan(Experiment):
         wandb.log({"steps_per_epoch": steps_per_epoch})
 
         beta = 0.0
+        eps_nan = 0  # épocas seguidas com l1 NaN (1 batch ruim o scaler resgata; 2 épocas não)
         for ep in range(start_ep, cfg["epochs"]):
             enc.train(); dec.train(); disc.train()
             soma, nb = {}, 0
@@ -197,6 +198,12 @@ class VaeGan(Experiment):
             print(f"ep {ep + 1:03d}/{cfg['epochs']} | l1 {l1m:.3f} perc {percm:.3f} "
                   f"kl {klm:.3f} adv {advm:.3f} d {dm:.3f} beta {beta:.3f} "
                   f"| dims ativas {dims_ativas}/{cfg['zdim']}")
+
+            # NaN é terminal: aborta e libera a GPU pra próxima receita do sweep
+            eps_nan = eps_nan + 1 if l1m != l1m else 0
+            if eps_nan >= 2:
+                raise RuntimeError(f"l1 NaN por {eps_nan} épocas seguidas (ep {ep + 1}): "
+                                   "treino divergiu, abortando o run")
 
             # validação: fidelidade em imagens não vistas — métrica objetivo do sweep
             val_l1 = self._validar(enc, dec, dl_val, device)
