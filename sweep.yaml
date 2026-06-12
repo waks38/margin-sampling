@@ -7,6 +7,12 @@ method: random
 metric:
   name: val_l1
   goal: minimize
+# mata runs ruins cedo: corte único na época 25 — a metade pior (pretas inclusas)
+# morre na metade do tempo; a metade melhor (~10 redes) treina as 50 épocas inteiras
+early_terminate:
+  type: hyperband
+  min_iter: 25
+  eta: 2
 parameters:
   beta:
     distribution: log_uniform_values

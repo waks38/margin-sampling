@@ -149,6 +149,9 @@ class VaeGan(Experiment):
 
                 with torch.amp.autocast(device, enabled=use_amp):
                     mu, lv = enc(x)
+                    # clamp: lv.exp() em fp16 estoura (->inf->NaN) se lv passar de ~11;
+                    # sigma em [e-5, e5] cobre qualquer posterior útil
+                    lv = lv.clamp(-10, 10)
                     rec = dec(reparam(mu, lv))
 
                 # passo do discriminador
@@ -167,7 +170,7 @@ class VaeGan(Experiment):
                 with torch.amp.autocast(device, enabled=use_amp):
                     l1 = F.l1_loss(rec, x)
                     lp = perc(rec, x) if perc is not None else torch.zeros((), device=device)
-                    kl = kl_div(mu, lv)
+                    kl = kl_div(mu.float(), lv.float())  # KL em fp32: exp/quadrado fora do fp16
                     ga = g_hinge(disc(rec)) if use_gan else torch.zeros((), device=device)
                     loss_g = l1 + cfg["l_perc"] * lp + beta * kl + cfg["l_adv"] * ga
                 scaler_g.scale(loss_g).backward()
