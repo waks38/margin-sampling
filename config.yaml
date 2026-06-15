@@ -2,7 +2,7 @@
 seed: 42
 
 # Lista de experimentos a rodar, em ordem (nome do BLOCO abaixo)
-run: ["dogs"]
+run: ["dogs_big"]
 
 # --- Blocos por experimento (cada um define sua própria forma) ---
 classification:
@@ -70,6 +70,37 @@ dogs:                        # Cats vs Dogs (competição Kaggle dogs-vs-cats)
   beta: 0.01
   beta_warm_epochs: 10
   disc_start_epoch: 15
+  l_perc: 0.3
+  l_adv: 0.7
+  amp: true
+  # checkpoint
+  ckpt_every: 5
+  resume: true
+
+dogs_big:                    # Cats vs Dogs — rede MAIOR (mais capacidade p/ a diversidade)
+  experiment: vae_gan        # mesma classe, só muda capacidade/escala
+  # dados (idênticos ao `dogs`)
+  data_root: "/kaggle/working/dogs-vs-cats/train"
+  channels: 3
+  classes: {cat: 0, dog: 1}
+  label_from: filename
+  group_by: image
+  img_size: 128
+  batch_size: 64             # mesma; rede mais larga = mais memória/amostra -> NÃO subir sem checar OOM
+  num_workers: 4
+  use_dp: false
+  val_frac: 0.15
+  test_frac: 0.15
+  # modelo — o ponto desta receita
+  base: 96                   # 64->96: ~2.25x compute (conv escala com base^2). "pouco", como combinado
+  zdim: 256                  # 128->256: dobra o latente (barato; só cresce as FC)
+  # treino
+  epochs: 70                 # +20 vs dogs: rede maior tem pra onde crescer; val_l1 decide o teto
+  lr_g: 0.0002
+  lr_d: 0.0001               # metade do lr_g: freia o D (no dogs ele dominava o G)
+  beta: 0.005                # default p/ run sem sweep; no sweep_big o agente sobrescreve (faixa reescalada p/ zdim 256)
+  beta_warm_epochs: 10
+  disc_start_epoch: 25       # 15->25: deixa a recon assentar antes do GAN pressionar
   l_perc: 0.3
   l_adv: 0.7
   amp: true
