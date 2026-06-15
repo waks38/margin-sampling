@@ -1,8 +1,8 @@
 ﻿# --- Chassi (genérico) ---
 seed: 42
 
-# Lista de experimentos a rodar, em ordem
-run: ["vae_gan"]
+# Lista de experimentos a rodar, em ordem (nome do BLOCO abaixo)
+run: ["dogs"]
 
 # --- Blocos por experimento (cada um define sua própria forma) ---
 classification:
@@ -16,10 +16,13 @@ classification:
   learning_rate: 0.001
   epochs: 10
 
-vae_gan:
+vae_gan:                     # raio-X (NÃO mexer: preserva runs/artefatos já no wandb)
   # dados
   data_root: "/kaggle/input/datasets/paultimothymooney/chest-xray-pneumonia/chest_xray"
   channels: 1                # raio-X = grayscale
+  # origem (defaults do data.py = raio-X, então estes 3 são opcionais aqui)
+  label_from: folder         # classe = pasta-pai (NORMAL/PNEUMONIA)
+  group_by: patient          # split sem vazar paciente
   img_size: 128              # múltiplo de 32
   batch_size: 64
   num_workers: 4             # >0 no Kaggle (Linux)
@@ -42,5 +45,36 @@ vae_gan:
   # checkpoint
   ckpt_every: 5              # salva checkpoint a cada N épocas (0 = desliga)
   resume: true               # retoma de outputs/vae_gan_ckpt.pt se existir
+
+dogs:                        # Cats vs Dogs (competição Kaggle dogs-vs-cats)
+  experiment: vae_gan        # roda o MESMO experimento (classe VaeGan), outro dataset
+  # dados — apontar pra pasta JÁ extraída do train.zip (ver célula de unzip)
+  data_root: "/kaggle/working/dogs-vs-cats/train"
+  channels: 3                # RGB
+  classes: {cat: 0, dog: 1}  # rótulos das 2 classes
+  label_from: filename       # classe = prefixo do nome (cat.0.jpg / dog.0.jpg)
+  group_by: image            # cada foto é única -> split disjunto por imagem
+  img_size: 128
+  batch_size: 48
+  num_workers: 4
+  use_dp: false
+  val_frac: 0.15
+  test_frac: 0.15
+  # modelo
+  base: 64
+  zdim: 128
+  # treino
+  epochs: 50
+  lr_g: 0.0002
+  lr_d: 0.0002
+  beta: 0.01
+  beta_warm_epochs: 10
+  disc_start_epoch: 15
+  l_perc: 0.3
+  l_adv: 0.7
+  amp: true
+  # checkpoint
+  ckpt_every: 5
+  resume: true
 
 

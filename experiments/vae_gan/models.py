@@ -124,9 +124,9 @@ class PatchDiscriminator(nn.Module):
 class VGGPerceptual(nn.Module):
     """Perda perceptual: compara ativacoes de uma VGG16 pre-treinada (ImageNet).
 
-    Imagens chegam em [-1,1] (grayscale, no raio-X). A VGG espera 3 canais em
-    [0,1] normalizados pelo ImageNet, entao convertemos antes. Pesos congelados.
-    Baixa ~500MB de pesos na 1a instanciacao.
+    Imagens chegam em [-1,1] (grayscale OU RGB). A VGG espera 3 canais em
+    [0,1] normalizados pelo ImageNet: _prep replica grayscale->3 e normaliza;
+    RGB ja passa direto. Pesos congelados. Baixa ~500MB na 1a instanciacao.
     """
 
     def __init__(self):

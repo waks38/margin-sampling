@@ -66,14 +66,20 @@ class VaeGan(Experiment):
         print(f"Rodando em: {device}")
 
         # ---- dados ---- (seed = universal, injetado pelo chassi)
-        itens = importar(cfg["data_root"])
+        # origem dirigida por config (defaults = raio-X): classe e grupo de split
+        itens = importar(cfg["data_root"], cfg.get("classes"),
+                         cfg.get("label_from", "folder"), cfg.get("group_by", "patient"))
         train, val, test = tratar(itens, cfg["val_frac"], cfg["test_frac"], cfg["seed"])
         dl_train, dl_val, _ = carregar(train, val, [], cfg["img_size"], cfg["batch_size"],
                                        cfg["channels"], cfg["num_workers"])
         print(f"split -> train {len(train)} | val {len(val)} | test {len(test)} (treina só no train)")
 
-        # conjuntos fixos (saudáveis e doentes) p/ visuais + gate, sempre os mesmos
-        xs_h, xs_s = self._fixos(train, cfg, device)
+        # nomes das 2 classes (label 0 e 1) p/ legenda dos visuais; default raio-X
+        inv = {v: k for k, v in (cfg.get("classes") or {"NORMAL": 0, "PNEUMONIA": 1}).items()}
+        nomes = (str(inv.get(0, "classe0")), str(inv.get(1, "classe1")))
+
+        # conjuntos fixos (classe 0 e classe 1) p/ visuais + gate, sempre os mesmos
+        xs_a, xs_b = self._fixos(train, cfg, device)
 
         # ---- modelos ----
         ch = cfg["channels"]
@@ -217,7 +223,7 @@ class VaeGan(Experiment):
 
             # visuais + gate: a cada 10 épocas e no fim (call separado)
             if (ep + 1) % 10 == 0 or ep == cfg["epochs"] - 1:
-                wandb.log(self._avaliar(enc, dec, xs_h, xs_s, device))
+                wandb.log(self._avaliar(enc, dec, xs_a, xs_b, device, nomes))
 
             # checkpoint periódico ("epoch" = próxima época a rodar no resume)
             if cfg.get("ckpt_every", 0) and (ep + 1) % cfg["ckpt_every"] == 0:
@@ -278,49 +284,53 @@ class VaeGan(Experiment):
     # ------------------------------------------------------------------
     @staticmethod
     def _fixos(train, cfg, device):
-        """Conjuntos fixos de até 8 saudáveis e 8 doentes (sempre os mesmos)."""
-        saud = [it for it in train if it["label"] == 0][:8]
-        doente = [it for it in train if it["label"] == 1][:8]
-        if not saud or not doente:
+        """Conjuntos fixos de até 8 da classe 0 e 8 da classe 1 (sempre os mesmos)."""
+        grupo_a = [it for it in train if it["label"] == 0][:8]
+        grupo_b = [it for it in train if it["label"] == 1][:8]
+        if not grupo_a or not grupo_b:
             return None, None  # falta uma das classes -> sem gate/visuais
-        ds = _ImagensXRay(saud + doente, cfg["img_size"], cfg["channels"])
-        xs_h = torch.stack([ds[i][0] for i in range(len(saud))]).to(device)
-        xs_s = torch.stack([ds[i][0] for i in range(len(saud), len(saud) + len(doente))]).to(device)
-        return xs_h, xs_s
+        ds = _ImagensXRay(grupo_a + grupo_b, cfg["img_size"], cfg["channels"])
+        xs_a = torch.stack([ds[i][0] for i in range(len(grupo_a))]).to(device)
+        xs_b = torch.stack([ds[i][0] for i in range(len(grupo_a), len(grupo_a) + len(grupo_b))]).to(device)
+        return xs_a, xs_b
 
     @staticmethod
     @torch.no_grad()
-    def _avaliar(enc, dec, xs_h, xs_s, device):
-        """Gate (colapso médio sobre pares) + visuais (recon e interpolação)."""
-        if xs_h is None or xs_s is None:
+    def _avaliar(enc, dec, xs_a, xs_b, device, nomes=("classe0", "classe1")):
+        """Gate (colapso médio sobre pares) + visuais (recon e interpolação).
+        nomes = (classe0, classe1) só rotula as legendas dos visuais (ex.: cat->dog)."""
+        if xs_a is None or xs_b is None:
             return {}
         enc.eval(); dec.eval()
         out = {}
+        na, nb = nomes
 
-        # GATE — colapso: L1 médio entre recon(saudável) e recon(doente) sobre os pares.
+        # GATE — colapso: L1 médio entre recon(classe 0) e recon(classe 1) sobre os pares.
         # Perto de 0 => decoder ignora z (colapsou). Robustez vem da média nos pares.
         # Pareia até o mínimo (as duas classes podem ter contagens diferentes).
-        n = min(xs_h.size(0), xs_s.size(0))
-        rec_h = dec(enc(xs_h[:n])[0])   # mu (média do posterior): recon determinística
-        rec_s = dec(enc(xs_s[:n])[0])   # gate estável e comparável entre épocas
-        out["colapso"] = float(F.l1_loss(rec_h, rec_s))
+        n = min(xs_a.size(0), xs_b.size(0))
+        rec_a = dec(enc(xs_a[:n])[0])   # mu (média do posterior): recon determinística
+        rec_b = dec(enc(xs_b[:n])[0])   # gate estável e comparável entre épocas
+        out["colapso"] = float(F.l1_loss(rec_a, rec_b))
 
-        # VISUAL — reconstrução: 4 saudáveis + 4 doentes; entrada (cima) vs recon (baixo)
-        x = torch.cat([xs_h[:4], xs_s[:4]])
+        # VISUAL — reconstrução: 4 da classe 0 + 4 da classe 1; entrada (cima) vs recon (baixo)
+        x = torch.cat([xs_a[:4], xs_b[:4]])
         rec = dec(enc(x)[0])            # mu: reconstrução sem ruído de amostragem
         g = vutils.make_grid(torch.cat([x, rec]), nrow=8, normalize=True, value_range=(-1, 1))
-        out["recon"] = wandb.Image(g.permute(1, 2, 0).cpu().numpy())
+        out["recon"] = wandb.Image(g.permute(1, 2, 0).cpu().numpy(),
+                                   caption=f"cima: entrada | baixo: recon ({na} x4, {nb} x4)")
 
-        # VISUAL — interpolação: 3 pares saudável->doente, 7 passos (o produto da tese)
-        n_pares = min(3, xs_h.size(0), xs_s.size(0))
+        # VISUAL — interpolação: 3 pares classe0->classe1, 7 passos (o produto da tese)
+        n_pares = min(3, xs_a.size(0), xs_b.size(0))
         linhas = []
         for i in range(n_pares):
-            za = enc(xs_h[i:i + 1])[0]  # mu das pontas: caminho limpo e reprodutível
-            zb = enc(xs_s[i:i + 1])[0]
+            za = enc(xs_a[i:i + 1])[0]  # mu das pontas: caminho limpo e reprodutível
+            zb = enc(xs_b[i:i + 1])[0]
             for t in torch.linspace(0, 1, 7, device=device):
                 linhas.append(dec(slerp(za, zb, t)))  # esférica: fica na casca de raio ~sqrt(d)
         gi = vutils.make_grid(torch.cat(linhas), nrow=7, normalize=True, value_range=(-1, 1))
-        out["interp"] = wandb.Image(gi.permute(1, 2, 0).cpu().numpy())
+        out["interp"] = wandb.Image(gi.permute(1, 2, 0).cpu().numpy(),
+                                    caption=f"interpolação {na} -> {nb} (7 passos)")
 
         enc.train(); dec.train()
         return out

@@ -1,9 +1,13 @@
-# Sweep do vae_gan: 20 runs random, 2 agentes (1 por GPU).
+# Sweep da fábrica de geradores (VAE-GAN). O dataset é o que estiver em
+# `run:` no config.yaml (ex.: ["dogs"]). 2 agentes (1 por GPU).
 # Criar:  wandb sweep sweep.yaml
-# Rodar:  CUDA_VISIBLE_DEVICES=0 wandb agent --count 10 <sweep_id> &
-#         CUDA_VISIBLE_DEVICES=1 wandb agent --count 10 <sweep_id>
+# Rodar:  CUDA_VISIBLE_DEVICES=0 wandb agent <sweep_id> &
+#         CUDA_VISIBLE_DEVICES=1 wandb agent <sweep_id>
+# run_cap = TOTAL de modelos (compartilhado pelos 2 agentes); como teto, os
+# agentes param sozinhos ao atingi-lo. (Alternativa: wandb agent --count N por agente.)
 program: main.py
 method: random
+run_cap: 10          # total de modelos a treinar no sweep
 metric:
   name: val_l1
   goal: minimize
@@ -16,8 +20,8 @@ early_terminate:
 parameters:
   beta:
     distribution: log_uniform_values
-    min: 0.003
-    max: 0.1
+    min: 0.001
+    max: 0.05
   l_adv:
     distribution: uniform
     min: 0.3
