@@ -15,9 +15,14 @@ def conv_bn(cin, cout, s=2):
 
 
 def deconv_bn(cin, cout):
-    """Upsample: conv transposta + BN + ReLU."""
+    """Upsample (nearest x2) + conv 3x3 + BN + ReLU.
+
+    Substitui o ConvTranspose: kernel 4/stride 2 sobrepõe de forma desigual e
+    gera o artefato "xadrez/mosaico". Upsample + conv 3x3 reamostra uniforme.
+    """
     return nn.Sequential(
-        nn.ConvTranspose2d(cin, cout, 4, 2, 1),
+        nn.Upsample(scale_factor=2, mode="nearest"),
+        nn.Conv2d(cin, cout, 3, 1, 1),
         nn.BatchNorm2d(cout),
         nn.ReLU(True),
     )
@@ -86,7 +91,8 @@ class Decoder(nn.Module):
             deconv_bn(base * 8, base * 4),
             deconv_bn(base * 4, base * 2),
             deconv_bn(base * 2, base),
-            nn.ConvTranspose2d(base, out_ch, 4, 2, 1),
+            nn.Upsample(scale_factor=2, mode="nearest"),   # última camada: idem, sem xadrez
+            nn.Conv2d(base, out_ch, 3, 1, 1),
             nn.Tanh(),
         )
 
